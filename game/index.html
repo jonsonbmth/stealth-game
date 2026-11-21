@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Gilded Hour — a stealth game in the Meridian Gallery</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #07060f;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif; color: #e8e2d0; }
+  #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #vignette { position: fixed; inset: 0; pointer-events: none; z-index: 3;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.55) 100%); }
+  .panel { background: rgba(10, 8, 24, 0.82); border: 1px solid rgba(201,162,39,0.45);
+    border-radius: 8px; box-shadow: 0 4px 18px rgba(0,0,0,0.5); }
+  /* ---- Top bar ---- */
+  #topbar { position: fixed; top: 0; left: 0; right: 0; height: 58px; z-index: 5;
+    display: flex; align-items: center; gap: 18px; padding: 0 14px;
+    background: linear-gradient(180deg, rgba(12,9,26,0.95), rgba(12,9,26,0.78));
+    border-bottom: 2px solid #c9a227; }
+  #topbar .title { font-family: Georgia, "Times New Roman", serif; font-size: 24px;
+    letter-spacing: 2px; color: #ffd94a; white-space: nowrap; }
+  #topbar .level { font-size: 12px; letter-spacing: 1px; color: #9fb4d8; white-space: nowrap; }
+  #topbar .level b { color: #e8e2d0; font-size: 13px; }
+  .chip { font-size: 11px; font-weight: 700; letter-spacing: 0.5px; padding: 3px 8px;
+    border-radius: 4px; white-space: nowrap; }
+  .chip-win { background: #1d5c2e; color: #bff0c8; }
+  .chip-lose { background: #6e1423; color: #ffc9c2; }
+  #topbar .spacer { flex: 1; }
+  .stat { text-align: right; line-height: 1.1; }
+  .stat .lbl { font-size: 10px; letter-spacing: 2px; color: #9fb4d8; }
+  .stat .val { font-size: 22px; font-weight: 800; color: #fff; font-family: Georgia, serif; }
+  #alert-wrap { width: 190px; }
+  #hud-alert-label { font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #ffd94a; text-align: center; }
+  .alert-bar { height: 10px; background: #241a2e; border: 1px solid #555; border-radius: 5px; overflow: hidden; margin-top: 3px; }
+  .alert-fill { height: 100%; width: 0%; background: #f2c230; transition: width 0.15s; }
+  .alert-fill.suspicious { background: #ff8c1a; }
+  .alert-fill.alerted { background: #ff2a1e; }
+  /* ---- Side panels ---- */
+  #left-panel { position: fixed; left: 10px; top: 68px; width: 232px; z-index: 5; padding: 10px 12px; }
+  #right-panel { position: fixed; right: 10px; top: 68px; width: 248px; z-index: 5; padding: 10px 12px; }
+  .panel h2 { margin: 0 0 8px 0; font-size: 12px; letter-spacing: 2px; color: #ffd94a;
+    border-bottom: 1px solid rgba(201,162,39,0.4); padding-bottom: 5px; }
+  .roster-row { display: flex; align-items: center; gap: 7px; font-size: 12.5px; padding: 4px 0; }
+  .roster-row b { color: #fff; }
+  .roster-row .rank { color: #9fb4d8; font-size: 11px; }
+  .roster-row .rstate { margin-left: auto; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .dot-green { background: #39d353; box-shadow: 0 0 6px #39d353; }
+  .dot-orange { background: #ff8c1a; box-shadow: 0 0 6px #ff8c1a; }
+  .dot-red { background: #ff2a1e; box-shadow: 0 0 8px #ff2a1e; }
+  .obj { font-size: 13px; padding: 3px 0; color: #e8e2d0; }
+  .obj.done { color: #7ddb8a; }
+  .loot-row { display: flex; justify-content: space-between; font-size: 12.5px; padding: 3px 0; }
+  .loot-row.got { color: #ffd94a; }
+  .loot-row b { color: #ffd94a; }
+  .panel .note { font-size: 11px; color: #9fb4d8; margin-top: 8px; line-height: 1.4; }
+  /* ---- Bottom bar ---- */
+  #bottombar { position: fixed; left: 0; right: 0; bottom: 0; height: 62px; z-index: 5;
+    display: flex; align-items: center; gap: 16px; padding: 0 14px;
+    background: linear-gradient(0deg, rgba(12,9,26,0.95), rgba(12,9,26,0.78));
+    border-top: 2px solid #c9a227; font-size: 12px; }
+  #bottombar .keys b { color: #ffd94a; }
+  #bottombar .keys { line-height: 1.5; }
+  .meter-label { font-size: 10px; letter-spacing: 2px; color: #9fb4d8; }
+  #noise-wrap { width: 150px; }
+  .noise-bar { height: 8px; background: #241a2e; border: 1px solid #555; border-radius: 4px; overflow: hidden; }
+  #hud-noise-fill { height: 100%; width: 0%; background: #2fd6c8; }
+  #hud-state { font-size: 11px; color: #9fb4d8; letter-spacing: 1px; }
+  /* ---- Minimap ---- */
+  #minimap-wrap { position: fixed; right: 10px; bottom: 74px; z-index: 5; padding: 6px; text-align: center; }
+  #minimap-wrap .lbl { font-size: 10px; letter-spacing: 2px; color: #ffd94a; margin-bottom: 4px; }
+  #hud-minimap { display: block; background: #0d0a18; border: 1px solid rgba(201,162,39,0.5); }
+  /* ---- Centre banner / toast / prompt ---- */
+  #banner-wrap { position: fixed; left: 50%; top: 34%; transform: translate(-50%, -50%);
+    z-index: 6; text-align: center; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+  #hud-banner { font-family: Georgia, serif; font-size: 64px; font-weight: 900; letter-spacing: 4px;
+    color: #ffd94a; text-shadow: 0 0 24px rgba(255,217,74,0.7), 0 4px 0 #000, 0 6px 18px #000; }
+  #banner-wrap.danger #hud-banner { color: #ff2a1e; text-shadow: 0 0 24px rgba(255,42,30,0.8), 0 4px 0 #000, 0 6px 18px #000; }
+  #banner-wrap.good #hud-banner { color: #7ddb8a; text-shadow: 0 0 24px rgba(125,219,138,0.7), 0 4px 0 #000, 0 6px 18px #000; }
+  #banner-wrap.high { top: 19%; }
+  #hud-banner-sub { font-size: 15px; color: #fff; text-shadow: 0 2px 6px #000; margin-top: 4px; }
+  #hud-toast { position: fixed; left: 50%; bottom: 118px; transform: translateX(-50%); z-index: 6;
+    background: rgba(10,8,24,0.9); border: 1px solid #c9a227; border-radius: 6px;
+    padding: 7px 16px; font-size: 14px; color: #ffd94a; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+  #hud-prompt { position: fixed; left: 50%; bottom: 74px; transform: translateX(-50%); z-index: 6;
+    font-size: 15px; font-weight: 700; color: #fff; text-shadow: 0 2px 6px #000; pointer-events: none; }
+  /* ---- Overlays ---- */
+  .overlay { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center;
+    justify-content: center; background: rgba(4, 3, 12, 0.72); }
+  .overlay.hidden { display: none; }
+  .card { width: 620px; max-width: 92vw; padding: 28px 34px; text-align: center; }
+  .card h1 { font-family: Georgia, serif; font-size: 44px; letter-spacing: 4px; color: #ffd94a; margin: 0 0 4px 0; }
+  .card h3 { font-size: 13px; letter-spacing: 3px; color: #9fb4d8; margin: 0 0 16px 0; font-weight: 400; }
+  .card p { font-size: 14.5px; line-height: 1.6; color: #e8e2d0; text-align: left; }
+  .card .controls { font-size: 13px; line-height: 1.9; text-align: left; margin: 14px 0;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(201,162,39,0.35);
+    border-radius: 6px; padding: 10px 16px; }
+  .card .controls b { color: #ffd94a; }
+  .big-btn { display: inline-block; margin-top: 10px; padding: 12px 34px; font-size: 17px;
+    font-weight: 800; letter-spacing: 2px; color: #1a1200; background: #ffd94a;
+    border: none; border-radius: 6px; cursor: pointer; }
+  .big-btn:hover { background: #ffe27a; }
+  .card .fine { font-size: 11.5px; color: #9fb4d8; margin-top: 14px; }
+  #end-title { font-family: Georgia, serif; font-size: 40px; letter-spacing: 3px; margin: 0 0 8px 0; }
+  #end-detail { font-size: 14px; line-height: 1.7; text-align: left; }
+  #probe { position: fixed; left: -9999px; top: 0; }
+  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div id="vignette"></div>
+
+<div id="topbar">
+  <div>
+    <div class="title">THE GILDED HOUR</div>
+    <div class="level">LEVEL <b>The Meridian Gallery</b> · NIGHT · 3 ZONES</div>
+  </div>
+  <span class="chip chip-win">WIN&nbsp; Steal the Star, reach the skylight</span>
+  <span class="chip chip-lose">LOSE&nbsp; Caught 3 times</span>
+  <div class="spacer"></div>
+  <div id="alert-wrap">
+    <div id="hud-alert-label">UNSEEN</div>
+    <div class="alert-bar"><div id="hud-alert-fill" class="alert-fill"></div></div>
+  </div>
+  <div class="stat"><div class="lbl">SCORE</div><div class="val" id="hud-score">0</div></div>
+  <div class="stat"><div class="lbl">TIME</div><div class="val" id="hud-timer">00:00</div></div>
+</div>
+
+<div id="left-panel" class="panel">
+  <h2>GUARD ROSTER — PATROLS YOU CAN LEARN</h2>
+  <div id="hud-roster"></div>
+  <div class="note">Yellow cone = calm · Orange = suspicious · Red = hunting. A guard who loses you searches, then walks back to his route.</div>
+</div>
+
+<div id="right-panel" class="panel">
+  <h2>OBJECTIVES</h2>
+  <div id="hud-objectives"></div>
+  <h2 style="margin-top:12px">LOOT — THE MERIDIAN COLLECTION</h2>
+  <div id="hud-loot"></div>
+  <div class="note" id="hud-ghost">GHOST — NEVER SPOTTED</div>
+</div>
+
+<div id="minimap-wrap" class="panel">
+  <div class="lbl">MINIMAP — MERIDIAN GALLERY</div>
+  <canvas id="hud-minimap" width="200" height="150"></canvas>
+</div>
+
+<div id="banner-wrap"><div id="hud-banner"></div><div id="hud-banner-sub"></div></div>
+<div id="hud-toast"></div>
+<div id="hud-prompt"></div>
+
+<div id="bottombar">
+  <div class="keys"><b>WASD / Arrows</b> move &nbsp;·&nbsp; <b>SHIFT</b> sneak (slow + silent) &nbsp;·&nbsp; <b>CLICK</b> toss a coin &nbsp;·&nbsp; <b>E</b> grab loot &nbsp;·&nbsp; <b>P</b> pause &nbsp;·&nbsp; <b>M</b> mute</div>
+  <div id="noise-wrap"><div class="meter-label">NOISE</div><div class="noise-bar"><div id="hud-noise-fill"></div></div></div>
+  <div><div class="meter-label">COINS</div><div id="hud-coins" style="font-size:15px;color:#ffd94a">●●●●●</div></div>
+  <div><div class="meter-label">STRIKES</div><div id="hud-strikes" style="font-size:15px;color:#ff6a5e">···</div></div>
+  <div id="hud-state">ENTRANCE HALL</div>
+</div>
+
+<div id="title-screen" class="overlay">
+  <div class="card panel">
+    <h1>THE GILDED HOUR</h1>
+    <h3>A STEALTH GAME IN THE MERIDIAN GALLERY · ONE NIGHT · ONE STAR</h3>
+    <p>Midnight in the Meridian Gallery. The Meridian Star — a diamond the size of a robin's egg —
+    sleeps on its plinth in the Vault, behind three patrols you can learn by heart. You are
+    <b>Wren</b>, a thief in a borrowed cloak. Slip past <b>Sgt. Marlowe</b>, <b>Pip</b>, <b>Odo</b>
+    and <b>Bram</b>, lift the Star and whatever else gleams, and vanish through the skylight
+    before dawn. Shadows hide you. Lamp light betrays you. A tossed coin buys you ten seconds.</p>
+    <div class="controls">
+      <b>WASD / Arrows</b> — move &nbsp; <b>SHIFT</b> — sneak (slow, silent, harder to spot)<br>
+      <b>CLICK</b> — toss a coin, the nearest guard goes to look &nbsp; <b>E</b> — grab loot / the Star<br>
+      <b>P</b> — pause &nbsp; <b>M</b> — mute &nbsp; <b>R</b> — retry after being caught<br>
+      Vision cones: <b style="color:#f2c230">yellow calm</b> · <b style="color:#ff8c1a">orange suspicious</b> · <b style="color:#ff2a1e">red hunting</b>
+    </div>
+    <button class="big-btn" id="start-btn">BEGIN THE HEIST</button>
+    <div class="fine">Original game — no commercial names, art or music. Sound is synthesised live; the game plays fully offline.</div>
+  </div>
+</div>
+
+<div id="pause-screen" class="overlay hidden">
+  <div class="card panel">
+    <h1 style="font-size:32px">PAUSED</h1>
+    <p style="text-align:center">The gallery holds its breath. Press <b>P</b> to keep moving.</p>
+    <button class="big-btn" id="resume-btn">RESUME</button>
+  </div>
+</div>
+
+<div id="end-screen" class="overlay hidden">
+  <div class="card panel">
+    <h1 id="end-title">BUSTED!</h1>
+    <div id="end-detail"></div>
+    <button class="big-btn" id="retry-btn">TRY AGAIN</button>
+  </div>
+</div>
+
+<div id="probe"></div>
+<p id="status" role="status" aria-live="polite"></p>
+<script src="vendor/three.min.js"></script>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
